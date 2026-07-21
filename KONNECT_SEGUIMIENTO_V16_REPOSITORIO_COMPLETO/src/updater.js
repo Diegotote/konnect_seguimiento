@@ -2,7 +2,7 @@
 import * as XLSX from "xlsx";
 
 const app = window.__KONNECT__;
-const STORAGE_KEY = "konnect_dashboard_v16_data";
+const STORAGE_KEY = "konnect_dashboard_v17_data";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -186,6 +186,41 @@ function bucketCommercialStatus(value) {
   if (t.includes("DESPU") || t.includes("RECUPER") || t.includes("TOUR VIRTUAL") || t.includes("LLAMADA")) return "Reactivación";
   if (t.includes("EVOLUC")) return "Desarrollo";
   return "Cierre";
+}
+
+function closeMonthIndex(value) {
+  if (value instanceof Date && !Number.isNaN(value.valueOf())) return value.getMonth();
+  if (typeof value === "number" && value >= 1 && value <= 12) return Math.trunc(value) - 1;
+  const text = normalizeText(value);
+  if (!text) return null;
+  const monthIndex = MONTHS.findIndex(month => text.includes(month));
+  if (monthIndex >= 0) return monthIndex;
+  const numeric = text.match(/(?:^|\s)(0?[1-9]|1[0-2])(?:$|\s)/);
+  if (numeric) return Number(numeric[1]) - 1;
+  const parsed = parseDate(value);
+  return parsed ? parsed.getMonth() : null;
+}
+
+function statusColorClass(value) {
+  const t = normalizeText(value);
+  if (t.includes("RECHAZ") || t.includes("BAJA") || t.includes("NO VIABLE")) return "status-danger";
+  if (t === "PAGADO" || t.includes("CONTRATO FIRMADO")) return "status-success";
+  if (t.includes("PAGO PEND") || t.includes("RECABANDO")) return "status-payment";
+  if (t.includes("CONTRATO")) return "status-contract";
+  if (t.includes("NDA")) return "status-nda";
+  if (t.includes("COMISION")) return "status-commission";
+  if (t.includes("INTEGRACION") || t.includes("ASESORES KONNECT")) return "status-integration";
+  if (t.includes("EVOLUC") || t.includes("TOUR") || t.includes("LLAMADA")) return "status-development";
+  return "status-neutral";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function normalizeMembership(value) {
@@ -506,7 +541,8 @@ function parseCommercialWorkbook(workbook) {
     membership: findHeaderIndex(headers, ["MEMBRESIA INTERESADO"]),
     status: findHeaderIndex(headers, ["ESTATUS"]),
     comment: findHeaderIndex(headers, ["COMENTARIOS"]),
-    commentDate: findHeaderIndex(headers, ["FECHA DE ULTIMO COMENTARIO"])
+    commentDate: findHeaderIndex(headers, ["FECHA DE ULTIMO COMENTARIO"]),
+    closeMonth: findHeaderIndex(headers, ["MES PARA CIERRE"])
   };
 
   const prospects = rows.slice(headerRow + 1).map(row => ({
@@ -519,7 +555,9 @@ function parseCommercialWorkbook(workbook) {
     membership: String(row[idx.membership] ?? "").trim(),
     status: String(row[idx.status] ?? "").trim(),
     comment: cleanText(row[idx.comment], 90),
-    commentDate: formatDate(row[idx.commentDate])
+    commentDate: formatDate(row[idx.commentDate]),
+    closeMonthRaw: idx.closeMonth >= 0 ? row[idx.closeMonth] : null,
+    closeMonthIndex: idx.closeMonth >= 0 ? closeMonthIndex(row[idx.closeMonth]) : null
   })).filter(row => row.name);
 
   const buckets = countBy(prospects, x => bucketCommercialStatus(x.status));
@@ -527,6 +565,13 @@ function parseCommercialWorkbook(workbook) {
   const directorsOpen = countBy(open, x => x.director);
   const locationsOpen = countBy(open, x => x.location);
   const memberships = countBy(prospects, x => normalizeMembership(x.membership));
+  const now = new Date();
+  const currentCloseMonthIndex = now.getMonth();
+  const nextCloseMonthIndex = (currentCloseMonthIndex + 1) % 12;
+  const currentCloseYear = now.getFullYear();
+  const nextCloseYear = currentCloseMonthIndex === 11 ? currentCloseYear + 1 : currentCloseYear;
+  const currentClosings = prospects.filter(x => x.closeMonthIndex === currentCloseMonthIndex);
+  const nextClosings = prospects.filter(x => x.closeMonthIndex === nextCloseMonthIndex);
 
   const rowForTable = x => [
     x.name,
@@ -551,7 +596,19 @@ function parseCommercialWorkbook(workbook) {
     reactivacion: makeView("reactivacion", "Prospectos en reactivación", x => bucketCommercialStatus(x.status) === "Reactivación"),
     desarrollo: makeView("desarrollo", "Prospectos en desarrollo", x => bucketCommercialStatus(x.status) === "Desarrollo"),
     cierre: makeView("cierre", "Prospectos en cierre", x => bucketCommercialStatus(x.status) === "Cierre"),
-    no_viable: makeView("no_viable", "Prospectos no viables", x => bucketCommercialStatus(x.status) === "No viable")
+    no_viable: makeView("no_viable", "Prospectos no viables", x => bucketCommercialStatus(x.status) === "No viable"),
+    prioritarios: {
+      title: `Cierres prioritarios de ${MONTHS[currentCloseMonthIndex].toLowerCase()}`,
+      columns: ["Nombre", "Programa / Membresía", "Director", "Localidad", "Estatus", "Teléfono", "Comentario"],
+      rows: currentClosings.map(rowForTable),
+      summary: [{ label: "Registros", value: formatNumber(currentClosings.length) }]
+    },
+    cierres_siguiente: {
+      title: `Cierres previstos para ${MONTHS[nextCloseMonthIndex].toLowerCase()}`,
+      columns: ["Nombre", "Programa / Membresía", "Director", "Localidad", "Estatus", "Teléfono", "Comentario"],
+      rows: nextClosings.map(rowForTable),
+      summary: [{ label: "Registros", value: formatNumber(nextClosings.length) }]
+    }
   };
 
   return {
@@ -563,6 +620,12 @@ function parseCommercialWorkbook(workbook) {
     directorsOpen,
     locationsOpen,
     memberships,
+    currentCloseMonthIndex,
+    nextCloseMonthIndex,
+    currentCloseYear,
+    nextCloseYear,
+    currentClosings,
+    nextClosings,
     views
   };
 }
@@ -765,6 +828,55 @@ function updateOperationalVisual(data) {
   });
 }
 
+function renderMonthClosingSlide(sectionId, rows, monthIndex, year) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const monthName = MONTHS[monthIndex] || "MES";
+  const monthLabel = monthName.charAt(0) + monthName.slice(1).toLowerCase();
+  const titleMonth = $(".month-slide-name", section);
+  const chip = $(".month-period-chip", section);
+  if (titleMonth) titleMonth.textContent = monthLabel;
+  if (chip) chip.textContent = `${monthName} ${year}`;
+
+  const directors = countBy(rows, x => x.director || "Sin asignar");
+  const statuses = countBy(rows, x => x.status || "Por definir");
+  const topDirector = entriesSorted(directors)[0] || ["—", 0];
+  const topStatus = entriesSorted(statuses)[0] || ["—", 0];
+
+  const countNode = $(".month-case-count", section);
+  const directorNode = $(".month-top-director", section);
+  const directorSub = $(".month-top-director-sub", section);
+  const statusNode = $(".month-top-status", section);
+  const statusSub = $(".month-top-status-sub", section);
+  const tableCount = $(".month-table-count", section);
+  if (countNode) countNode.textContent = formatNumber(rows.length);
+  if (directorNode) directorNode.textContent = topDirector[0];
+  if (directorSub) directorSub.textContent = `${formatNumber(topDirector[1])} casos`;
+  if (statusNode) statusNode.textContent = topStatus[0];
+  if (statusSub) statusSub.textContent = `${formatNumber(topStatus[1])} casos`;
+  if (tableCount) tableCount.textContent = `${formatNumber(rows.length)} registros`;
+
+  const tbody = $(".month-closing-table tbody", section);
+  if (tbody) {
+    tbody.innerHTML = rows.map(row => `
+      <tr>
+        <td><div class="priority-person">${escapeHtml(row.name)}</div><div class="priority-location">${escapeHtml(row.location || "—")}</div></td>
+        <td>${escapeHtml(row.program || row.membership || "—")}</td>
+        <td>${escapeHtml(row.director || "—")}</td>
+        <td><span class="month-status-pill ${statusColorClass(row.status)}">${escapeHtml(row.status || "Por definir")}</span></td>
+        <td><div class="priority-comment">${escapeHtml(row.comment || "Sin comentario")}</div></td>
+      </tr>
+    `).join("");
+  }
+
+  const wrap = $(".month-closing-table-wrap", section);
+  if (wrap) {
+    const existing = $(".priority-empty-state", wrap);
+    if (existing) existing.remove();
+    if (!rows.length) wrap.insertAdjacentHTML("beforeend", '<div class="priority-empty-state">No hay cierres marcados para este mes.</div>');
+  }
+}
+
 function updateCommercialVisual(data) {
   const paid = data.buckets["Pagado"] || 0;
   const open = data.open.length;
@@ -783,14 +895,17 @@ function updateCommercialVisual(data) {
   );
   replaceSectionContent("com-01", "Directores con seguimiento abierto", buildBars(entriesSorted(data.directorsOpen), false));
 
+  renderMonthClosingSlide("com-02", data.currentClosings || [], data.currentCloseMonthIndex ?? new Date().getMonth(), data.currentCloseYear ?? new Date().getFullYear());
+  renderMonthClosingSlide("com-03", data.nextClosings || [], data.nextCloseMonthIndex ?? ((new Date().getMonth() + 1) % 12), data.nextCloseYear ?? new Date().getFullYear());
+
   const topLocation = entriesSorted(data.locationsOpen)[0] || ["Sin localidad", 0];
-  setMetric("com-03", "Reactivación", formatNumber(data.buckets["Reactivación"] || 0));
-  setMetric("com-03", "En cierre", formatNumber(data.buckets["Cierre"] || 0));
-  setMetric("com-03", "Localidad principal", topLocation[0], `${formatNumber(topLocation[1])} casos`);
-  setMetric("com-03", "Seguimiento abierto", formatNumber(open));
-  replaceSectionContent("com-03", "Localidades con mayor seguimiento", buildBars(entriesSorted(data.locationsOpen, 6), false));
+  setMetric("com-04", "Reactivación", formatNumber(data.buckets["Reactivación"] || 0));
+  setMetric("com-04", "En cierre", formatNumber(data.buckets["Cierre"] || 0));
+  setMetric("com-04", "Localidad principal", topLocation[0], `${formatNumber(topLocation[1])} casos`);
+  setMetric("com-04", "Seguimiento abierto", formatNumber(open));
+  replaceSectionContent("com-04", "Localidades con mayor seguimiento", buildBars(entriesSorted(data.locationsOpen, 6), false));
   replaceSectionContent(
-    "com-03",
+    "com-04",
     "Estado de seguimiento abierto",
     buildDonut([
       { name: "Reactivación", value: data.buckets["Reactivación"] || 0 },
@@ -802,7 +917,6 @@ function updateCommercialVisual(data) {
   Object.entries(data.views).forEach(([key, value]) => {
     app.viewTables[key] = value;
   });
-  // app.viewTables.prioritarios stays frozen intentionally.
 }
 
 function applyPayload(payload, persist = true) {
@@ -834,7 +948,8 @@ function showValidation(payload, file) {
       ["Seguimiento abierto", formatNumber(payload.open.length)],
       ["Pagados", formatNumber(payload.buckets["Pagado"] || 0)],
       ["Directores", formatNumber(Object.keys(payload.directorsOpen).length)],
-      ["Prioritarios", "Sin cambios"]
+      [`Cierres ${MONTH_LABELS[payload.currentCloseMonthIndex] || "actual"}`, formatNumber(payload.currentClosings?.length || 0)],
+      [`Cierres ${MONTH_LABELS[payload.nextCloseMonthIndex] || "siguiente"}`, formatNumber(payload.nextClosings?.length || 0)]
     );
   }
   updateValidation.innerHTML = items.map(([label, value]) => `
@@ -898,7 +1013,7 @@ $$(".update-choice-card").forEach(button => {
       : "Actualizar seguimiento comercial";
     uploadDescription.textContent = updateType === "operational"
       ? "Carga el archivo actualizado del Pipeline operativo."
-      : "Carga el archivo actualizado de prospectos comerciales. Los 12 prioritarios permanecerán sin cambios.";
+      : "Carga el archivo actualizado de prospectos comerciales. Los cierres del mes actual y siguiente se detectarán desde la columna Mes para cierre.";
     resetUploadUI();
   });
 });
@@ -943,7 +1058,7 @@ applyUpdate?.addEventListener("click", () => {
   setTimeout(closeToStart, 900);
 });
 
-// Restore last browser-saved update without touching frozen priority cases.
+// Restore last browser-saved update.
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
   if (saved.operational) applyPayload(saved.operational, false);

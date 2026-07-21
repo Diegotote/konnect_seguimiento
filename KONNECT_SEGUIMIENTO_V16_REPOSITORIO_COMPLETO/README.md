@@ -1,10 +1,17 @@
-# KONNECT Seguimiento V16
+# KONNECT Seguimiento V17
 
 Repositorio listo para GitHub y Vercel.
 
+## Novedades V17
+
+- Cierres prioritarios del mes actual detectados desde `MES PARA CIERRE`.
+- Nueva diapositiva para los cierres del mes siguiente.
+- Ambas vistas usan tablas visibles, encabezado fijo, scroll morado y estatus por color.
+- Al cargar el archivo comercial, ambas tablas se actualizan automáticamente.
+
 ## Subir a GitHub
 
-Sube el contenido de esta carpeta a la raíz del repositorio. Deben verse directamente:
+Sube el contenido de esta carpeta directamente a la raíz del repositorio. Deben verse:
 
 - `dist/`
 - `src/`
@@ -15,9 +22,9 @@ Sube el contenido de esta carpeta a la raíz del repositorio. Deben verse direct
 
 No subas `node_modules`.
 
-## Configuración en Vercel
+## Vercel
 
 - Framework Preset: Other
 - Root Directory: `./`
 
-El archivo `vercel.json` ya indica a Vercel que publique la carpeta `dist` sin ejecutar `npm install` ni recompilar el proyecto.
+El archivo `vercel.json` publica la carpeta `dist` ya compilada.
