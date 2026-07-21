@@ -399,6 +399,7 @@ function parseOperationalWorkbook(workbook) {
   const integrationBlockers = countBy(stages["Integración"].rows, x => classifyBlocker(x.comment));
   const projectionByFinancial = moneyBy(projection.projection, x => x.financial, x => x.amount);
   const dispersionByFinancial = moneyBy(projection.dispersions, x => x.financial, x => x.amount);
+  const dispersionCountByFinancial = countBy(projection.dispersions, x => normalizeText(x.financial) || 'Sin financiera');
 
   const previousHistory = historical.filter(x => x.monthIndex < (projection.periodMonth ?? latestDate.getMonth())).at(-1) || historical.at(-1);
   const previousAmount = previousHistory?.amount || 0;
@@ -519,6 +520,7 @@ function parseOperationalWorkbook(workbook) {
     integrationBlockers,
     projectionByFinancial,
     dispersionByFinancial,
+    dispersionCountByFinancial,
     views
   };
 }
@@ -813,14 +815,12 @@ function updateOperationalVisual(data) {
   setMetric("op-05", "Operaciones", formatNumber(data.projection.dispersions.length));
   setMetric("op-05", "Avance", formatPercent(data.progress));
   setMetric("op-05", "Faltante", formatMoney(data.missing));
-  replaceSectionContent("op-05", "Concentración por financiera", buildBars(entriesSorted(data.dispersionByFinancial), true));
+  replaceSectionContent("op-05", "Operaciones por financiera", buildBars(entriesSorted(data.dispersionCountByFinancial), false));
 
   const sortedDisp = [...data.projection.dispersions].sort((a, b) => b.amount - a.amount);
-  const top3 = sumBy(sortedDisp.slice(0, 3), x => x.amount);
-  const principal = entriesSorted(data.dispersionByFinancial)[0] || ["Sin financiera", 0];
+  const principal = entriesSorted(data.dispersionCountByFinancial)[0] || ["Sin financiera", 0];
   setMetric("op-05", "Mayor operación", formatMoney(sortedDisp[0]?.amount || 0), cleanText(sortedDisp[0]?.client || "Sin operación", 50));
-  setMetric("op-05", "Top 3 del resultado", formatPercent(data.dispersed ? top3 / data.dispersed * 100 : 0));
-  setMetric("op-05", "Financiera principal", principal[0], formatMoney(principal[1]));
+  setMetric("op-05", "Financiera principal", principal[0], `${formatNumber(principal[1])} operaciones`);
   setMetric("op-05", "Promedio", formatMoney(data.projection.dispersions.length ? data.dispersed / data.projection.dispersions.length : 0));
 
   Object.entries(data.views).forEach(([key, value]) => {

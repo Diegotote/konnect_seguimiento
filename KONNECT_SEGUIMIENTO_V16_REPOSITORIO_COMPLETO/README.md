@@ -1,8 +1,8 @@
-# KONNECT Seguimiento V17
+# KONNECT Seguimiento V18
 
 Repositorio listo para GitHub y Vercel.
 
-## Novedades V17
+## Novedades V18
 
 - Cierres prioritarios del mes actual detectados desde `MES PARA CIERRE`.
 - Nueva diapositiva para los cierres del mes siguiente.
@@ -28,3 +28,9 @@ No subas `node_modules`.
 - Root Directory: `./`
 
 El archivo `vercel.json` publica la carpeta `dist` ya compilada.
+
+
+## Cambio operativo V18
+
+- La diapositiva de dispersiones muestra operaciones por financiera, no montos.
+- Se eliminó el indicador “Top 3 del resultado”.
