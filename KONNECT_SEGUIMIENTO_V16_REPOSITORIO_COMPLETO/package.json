@@ -534,7 +534,10 @@ function hasExcludedCommercialName(value) {
 }
 
 function isExcludedCommercialRecord(record) {
-  return hasExcludedCommercialName(record.director) || hasExcludedCommercialName(record.referred);
+  const values = Array.isArray(record.sourceValues)
+    ? record.sourceValues
+    : Object.values(record);
+  return values.some(value => hasExcludedCommercialName(value));
 }
 
 function hasNoReferral(value) {
@@ -630,6 +633,7 @@ function parseCommercialWorkbook(workbook) {
   };
 
   const allProspects = rows.slice(headerRow + 1).map(row => ({
+    sourceValues: row.map(value => String(value ?? "")),
     name: String(row[idx.name] ?? "").trim(),
     program: String(row[idx.program] ?? "").trim(),
     director: String(row[idx.director] ?? "").trim() || "Sin asignar",
