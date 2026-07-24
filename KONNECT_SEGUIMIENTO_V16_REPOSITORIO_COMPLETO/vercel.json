@@ -1,7 +1,15 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "",
-  "buildCommand": "echo \"Using prebuilt dist\"",
-  "outputDirectory": "dist"
-}
+# KONNECT Seguimiento V19
+
+Versión basada visualmente en V18.
+
+## Cambios comerciales
+
+- Excluye completamente los registros cuyo director o referencia incluya Nancy, Pedro, Erika o Ericka.
+- Separa el alcance de Diego y Jorge entre cartera 100% propia y cartera referenciada.
+- Identifica el origen de las referencias y presenta la distribución por estatus.
+- Conserva la detección automática de cierres del mes actual y del siguiente mediante `MES PARA CIERRE`.
+- Mantiene sin cambios la presentación operativa y el diseño general de V18.
+
+## GitHub y Vercel
+
+Sube todo el contenido a la raíz del repositorio. `vercel.json` publica la carpeta `dist` ya compilada.
